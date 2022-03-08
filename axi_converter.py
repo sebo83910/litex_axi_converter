@@ -71,6 +71,43 @@ class AXIConverter(Module):
         # Run Vivado's tcl core packager script
         os.system("cd {} && vivado -mode batch -source packager.tcl".format(package))
 
+    def generate_project(self, build_name):
+        part = "XC7Z010-CLG225-1"
+
+        # Create project directory
+        project = "project_{}".format(build_name)
+        
+        shutil.rmtree(project, ignore_errors=True)
+        os.makedirs(project)
+
+        # Prepare Vivado's tcl core packager script
+        tcl = []
+        tcl.append("set project_dir \"{}\"".format(project))
+        tcl.append("set design_name \"{}\"".format(build_name))
+        # set up IP repo
+        tcl.append("set lib_dirs  [list  .. ]")
+        tcl.append("set_property ip_repo_paths $lib_dirs [current_fileset]")
+        tcl.append("update_ip_catalog")
+        # set up bd design
+        tcl.append("create_bd_design $design_name")
+        #build the BD
+        tcl.append("create_bd_cell -type ip -vlnv Enjoy-Digital:user:axi_converter_128b_to_64b:1.0 axi_converter_128b_t_0")
+        tcl.append("apply_bd_automation -rule xilinx.com:bd_rule:clkrst -config {Clk \"New Clocking Wizard (100 MHz)\" }  [get_bd_pins axi_converter_128b_t_0/axi_clk]")
+        tcl.append("make_bd_pins_external  [get_bd_pins clk_wiz/reset]")
+        tcl.append("make_bd_pins_external  [get_bd_pins clk_wiz/clk_in1]")
+        tcl.append("make_bd_intf_pins_external  [get_bd_intf_pins axi_converter_128b_t_0/axi_in]")
+        tcl.append("make_bd_intf_pins_external  [get_bd_intf_pins axi_converter_128b_t_0/axi_out]")
+        #Validate the design
+        tcl.append("validate_bd_design")
+        tcl.append("regenerate_bd_layout")
+        tcl.append("save_bd_design")
+
+        tools.write_to_file(project + "/project.tcl", "\n".join(tcl))
+
+        # Run Vivado's tcl core packager script
+        os.system("cd {} && vivado -source project.tcl".format(project))
+
+
 # Build --------------------------------------------------------------------------------------------
 
 def main():
@@ -81,6 +118,7 @@ def main():
     parser.add_argument("--reverse",       action="store_true", help="Reverse converter ordering.")
     parser.add_argument("--build",         action="store_true", help="Build core")
     parser.add_argument("--package",       action="store_true", help="Package core")
+    parser.add_argument("--project",       action="store_true", help="Create project including the core")
     args = parser.parse_args()
 
     # Generate core --------------------------------------------------------------------------------
@@ -98,6 +136,8 @@ def main():
         platform.build(module, build_name=build_name, run=False, regular_comb=False)
     if args.package:
         module.generate_package(build_name)
+    if args.project:
+        module.generate_project(build_name)
 
 if __name__ == "__main__":
     main()
