@@ -125,6 +125,8 @@ if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
 Enjoy-Digital:user:axi_converter_128b_to_64b:1.0\
 xilinx.com:ip:proc_sys_reset:5.0\
+xilinx.com:ip:processing_system7:5.5\
+xilinx.com:ip:smartconnect:1.0\
 "
 
    set list_ips_missing ""
@@ -188,7 +190,11 @@ proc create_root_design { parentCell } {
 
 
   # Create interface ports
-  set axi_in_0 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 axi_in_0 ]
+  set DDR [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:ddrx_rtl:1.0 DDR ]
+
+  set FIXED_IO [ create_bd_intf_port -mode Master -vlnv xilinx.com:display_processing_system7:fixedio_rtl:1.0 FIXED_IO ]
+
+  set axis_in [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 axis_in ]
   set_property -dict [ list \
    CONFIG.HAS_TKEEP {0} \
    CONFIG.HAS_TLAST {1} \
@@ -199,20 +205,24 @@ proc create_root_design { parentCell } {
    CONFIG.TDEST_WIDTH {0} \
    CONFIG.TID_WIDTH {0} \
    CONFIG.TUSER_WIDTH {0} \
-   ] $axi_in_0
+   ] $axis_in
 
-  set axi_out_0 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 axi_out_0 ]
+  set axis_out [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 axis_out ]
 
 
   # Create ports
-  set clk_in1_0 [ create_bd_port -dir I -type clk clk_in1_0 ]
+  set clk_axilite [ create_bd_port -dir I -type clk clk_axilite ]
   set_property -dict [ list \
-   CONFIG.ASSOCIATED_BUSIF {axi_in_0:axi_out_0} \
- ] $clk_in1_0
-  set reset_rtl_0 [ create_bd_port -dir I -type rst reset_rtl_0 ]
+   CONFIG.ASSOCIATED_BUSIF {} \
+ ] $clk_axilite
+  set clk_axis [ create_bd_port -dir I -type clk clk_axis ]
+  set_property -dict [ list \
+   CONFIG.ASSOCIATED_BUSIF {axis_in:axis_out} \
+ ] $clk_axis
+  set reset [ create_bd_port -dir I -type rst reset ]
   set_property -dict [ list \
    CONFIG.POLARITY {ACTIVE_LOW} \
- ] $reset_rtl_0
+ ] $reset
 
   # Create instance: axi_converter_128b_t_0, and set properties
   set axi_converter_128b_t_0 [ create_bd_cell -type ip -vlnv Enjoy-Digital:user:axi_converter_128b_to_64b:1.0 axi_converter_128b_t_0 ]
@@ -220,16 +230,42 @@ proc create_root_design { parentCell } {
   # Create instance: proc_sys_reset_0, and set properties
   set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
 
+  # Create instance: proc_sys_reset_1, and set properties
+  set proc_sys_reset_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_1 ]
+
+  # Create instance: processing_system7_0, and set properties
+  set processing_system7_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7:5.5 processing_system7_0 ]
+  set_property -dict [ list \
+   CONFIG.PCW_FPGA_FCLK0_ENABLE {1} \
+   CONFIG.PCW_FPGA_FCLK1_ENABLE {0} \
+   CONFIG.PCW_FPGA_FCLK2_ENABLE {0} \
+   CONFIG.PCW_FPGA_FCLK3_ENABLE {0} \
+ ] $processing_system7_0
+
+  # Create instance: smartconnect_0, and set properties
+  set smartconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0 ]
+  set_property -dict [ list \
+   CONFIG.NUM_SI {1} \
+ ] $smartconnect_0
+
   # Create interface connections
-  connect_bd_intf_net -intf_net axi_converter_128b_t_0_axi_out [get_bd_intf_ports axi_out_0] [get_bd_intf_pins axi_converter_128b_t_0/axi_out]
-  connect_bd_intf_net -intf_net axi_in_0_1 [get_bd_intf_ports axi_in_0] [get_bd_intf_pins axi_converter_128b_t_0/axi_in]
+  connect_bd_intf_net -intf_net axi_converter_128b_t_0_axis_out [get_bd_intf_ports axis_out] [get_bd_intf_pins axi_converter_128b_t_0/axis_out]
+  connect_bd_intf_net -intf_net axis_in_0_1 [get_bd_intf_ports axis_in] [get_bd_intf_pins axi_converter_128b_t_0/axis_in]
+  connect_bd_intf_net -intf_net processing_system7_0_DDR [get_bd_intf_ports DDR] [get_bd_intf_pins processing_system7_0/DDR]
+  connect_bd_intf_net -intf_net processing_system7_0_FIXED_IO [get_bd_intf_ports FIXED_IO] [get_bd_intf_pins processing_system7_0/FIXED_IO]
+  connect_bd_intf_net -intf_net processing_system7_0_M_AXI_GP0 [get_bd_intf_pins processing_system7_0/M_AXI_GP0] [get_bd_intf_pins smartconnect_0/S00_AXI]
+  connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins axi_converter_128b_t_0/axilite_in] [get_bd_intf_pins smartconnect_0/M00_AXI]
 
   # Create port connections
-  connect_bd_net -net clk_wiz_clk_out1 [get_bd_ports clk_in1_0] [get_bd_pins axi_converter_128b_t_0/axi_clk] [get_bd_pins proc_sys_reset_0/slowest_sync_clk]
-  connect_bd_net -net proc_sys_reset_0_peripheral_reset [get_bd_pins axi_converter_128b_t_0/axi_rst] [get_bd_pins proc_sys_reset_0/peripheral_reset]
-  connect_bd_net -net reset_rtl_0_1 [get_bd_ports reset_rtl_0] [get_bd_pins proc_sys_reset_0/ext_reset_in]
+  connect_bd_net -net clk_in1_1_1 [get_bd_ports clk_axilite] [get_bd_pins axi_converter_128b_t_0/axilite_clk] [get_bd_pins proc_sys_reset_1/slowest_sync_clk] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins smartconnect_0/aclk]
+  connect_bd_net -net clk_wiz_clk_out1 [get_bd_ports clk_axis] [get_bd_pins axi_converter_128b_t_0/axis_clk] [get_bd_pins proc_sys_reset_0/slowest_sync_clk]
+  connect_bd_net -net proc_sys_reset_0_peripheral_reset [get_bd_pins axi_converter_128b_t_0/axis_rst] [get_bd_pins proc_sys_reset_0/peripheral_reset]
+  connect_bd_net -net proc_sys_reset_1_interconnect_aresetn [get_bd_pins proc_sys_reset_1/interconnect_aresetn] [get_bd_pins smartconnect_0/aresetn]
+  connect_bd_net -net proc_sys_reset_1_peripheral_reset [get_bd_pins axi_converter_128b_t_0/axilite_rst] [get_bd_pins proc_sys_reset_1/peripheral_reset]
+  connect_bd_net -net reset_rtl_0_1 [get_bd_ports reset] [get_bd_pins proc_sys_reset_0/ext_reset_in] [get_bd_pins proc_sys_reset_1/ext_reset_in]
 
   # Create address segments
+  create_bd_addr_seg -range 0x40000000 -offset 0x40000000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_converter_128b_t_0/axilite_in/reg0] SEG_axi_converter_128b_t_0_reg0
 
 
   # Restore current instance

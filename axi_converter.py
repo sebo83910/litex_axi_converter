@@ -55,30 +55,41 @@ proc proc_add_bus_clock {clock_signal_name bus_inf_name {reset_signal_name ""} {
 
 def get_clkin_ios():
     return [
-        ("axi_clk",  0, Pins(1)),
-        ("axi_rst",  0, Pins(1)),
+        ("axis_clk",  0, Pins(1)),
+        ("axis_rst",  0, Pins(1)),
+        ("axilite_clk",  0, Pins(1)),
+        ("axilite_rst",  0, Pins(1)),
         ("irq"    ,  0, Pins(1)),
     ]
 
 # AXIConverter -------------------------------------------------------------------------------------
 
 class AXIConverter(Module):
-    def __init__(self, platform, input_width=64, output_width=64, user_width=0, reverse=False):
+    def __init__(self, platform, address_width=64, input_width=64, output_width=64, user_width=0, reverse=False):
         # Clocking ---------------------------------------------------------------------------------
         platform.add_extension(get_clkin_ios())
         self.clock_domains.cd_sys  = ClockDomain()
-        self.comb += self.cd_sys.clk.eq(platform.request("axi_clk"))
-        self.comb += self.cd_sys.rst.eq(platform.request("axi_rst"))
+        self.comb += self.cd_sys.clk.eq(platform.request("axis_clk"))
+        self.comb += self.cd_sys.rst.eq(platform.request("axis_rst"))
+
+        self.clock_domains.cd_syslite  = ClockDomain()
+        self.comb += self.cd_syslite.clk.eq(platform.request("axilite_clk"))
+        self.comb += self.cd_syslite.rst.eq(platform.request("axilite_rst"))
+
+        # Input AXI Lite ---------------------------------------------------------------------------
+        axilite_in = AXILiteInterface(data_width=32, address_width=address_width, clock_domain="cd_syslite")
+        platform.add_extension(axilite_in.get_ios("axilite_in"))
+        self.comb += axilite_in.connect_to_pads(platform.request("axilite_in"), mode="slave")
 
         # Input AXI --------------------------------------------------------------------------------
-        axi_in = AXIStreamInterface(data_width=input_width, user_width=user_width)
-        platform.add_extension(axi_in.get_ios("axi_in"))
-        self.comb += axi_in.connect_to_pads(platform.request("axi_in"), mode="slave")
+        axis_in = AXIStreamInterface(data_width=input_width, user_width=user_width)
+        platform.add_extension(axis_in.get_ios("axis_in"))
+        self.comb += axis_in.connect_to_pads(platform.request("axis_in"), mode="slave")
 
         # Output AXI -------------------------------------------------------------------------------
-        axi_out = AXIStreamInterface(data_width=output_width, user_width=user_width)
-        platform.add_extension(axi_out.get_ios("axi_out"))
-        self.comb += axi_out.connect_to_pads(platform.request("axi_out"), mode="master")
+        axis_out = AXIStreamInterface(data_width=output_width, user_width=user_width)
+        platform.add_extension(axis_out.get_ios("axis_out"))
+        self.comb += axis_out.connect_to_pads(platform.request("axis_out"), mode="master")
 
         self.submodules.ev = ev.EventManager()
         self.ev.my_int1 = ev.EventSourceProcess()
@@ -91,10 +102,10 @@ class AXIConverter(Module):
         self.comb += platform.request("irq").eq(self.ev.irq)
 
         # Converter --------------------------------------------------------------------------------
-        converter = stream.StrideConverter(axi_in.description, axi_out.description, reverse=reverse)
+        converter = stream.StrideConverter(axis_in.description, axis_out.description, reverse=reverse)
         self.submodules += converter
-        self.comb += axi_in.connect(converter.sink)
-        self.comb += converter.source.connect(axi_out)
+        self.comb += axis_in.connect(converter.sink)
+        self.comb += converter.source.connect(axis_out)
 
     def generate_package(self, build_name):
         # Create package directory
@@ -113,7 +124,8 @@ class AXIConverter(Module):
         tcl.append("ipx::edit_ip_in_project -upgrade true -name {} -directory {}.tmp component.xml".format(build_name, build_name))
         tcl.append("ipx::current_core component.xml")
         #SEBO: How to retrieve from LiteX the clock, reset and interface names?
-        tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axi_clk", "axi_in:axi_out", "axi_rst"))
+        tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axis_clk", "axis_in:axis_out", "axis_rst"))
+        tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axilite_clk", "axilite_in", "axilite_rst"))
         tcl.append("ipx::update_checksums [ipx::current_core]")
         tcl.append("ipx::save_core [ipx::current_core]")
         tcl.append("close_project")
