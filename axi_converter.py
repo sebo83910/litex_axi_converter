@@ -13,6 +13,43 @@ from litex.build.xilinx import XilinxPlatform
 from litex.soc.interconnect import stream
 from litex.soc.interconnect.axi import *
 
+proc_add_bus_clock = """
+proc proc_add_bus_clock {clock_signal_name bus_inf_name {reset_signal_name ""} {reset_signal_mode "slave"}} {
+  set bus_inf_name_clean [string map {":" "_"} $bus_inf_name]
+  set clock_inf_name [format "%s%s" $bus_inf_name_clean "_signal_clock"]
+  set clock_inf [ipx::add_bus_interface $clock_inf_name [ipx::current_core]]
+  set_property abstraction_type_vlnv "xilinx.com:signal:clock_rtl:1.0" $clock_inf
+  set_property bus_type_vlnv "xilinx.com:signal:clock:1.0" $clock_inf
+  set_property display_name $clock_inf_name $clock_inf
+  set clock_map [ipx::add_port_map "CLK" $clock_inf]
+  set_property physical_name $clock_signal_name $clock_map
+
+  set assoc_busif [ipx::add_bus_parameter "ASSOCIATED_BUSIF" $clock_inf]
+  set_property value $bus_inf_name $assoc_busif
+
+  if { $reset_signal_name != "" } {
+    set assoc_reset [ipx::add_bus_parameter "ASSOCIATED_RESET" $clock_inf]
+    set_property value $reset_signal_name $assoc_reset
+
+    set reset_inf_name [format "%s%s" $bus_inf_name_clean "_signal_reset"]
+    set reset_inf [ipx::add_bus_interface $reset_inf_name [ipx::current_core]]
+    set_property abstraction_type_vlnv "xilinx.com:signal:reset_rtl:1.0" $reset_inf
+    set_property bus_type_vlnv "xilinx.com:signal:reset:1.0" $reset_inf
+    set_property display_name $reset_inf_name $reset_inf
+    set_property interface_mode $reset_signal_mode $reset_inf
+    set reset_map [ipx::add_port_map "RST" $reset_inf]
+    set_property physical_name $reset_signal_name $reset_map
+
+    set reset_polarity [ipx::add_bus_parameter "POLARITY" $reset_inf]
+    if {[string match {*[Nn]} $reset_signal_name] == 1} {
+      set_property value "ACTIVE_LOW" $reset_polarity
+    } else {
+      set_property value "ACTIVE_HIGH" $reset_polarity
+    }
+  }
+}
+"""
+
 # IOs/Interfaces -----------------------------------------------------------------------------------
 
 def get_clkin_ios():
@@ -58,10 +95,14 @@ class AXIConverter(Module):
 
         # Prepare Vivado's tcl core packager script
         tcl = []
+        tcl.append(proc_add_bus_clock)
         tcl.append("create_project -force -name {}_packager".format(build_name))
         tcl.append("ipx::infer_core -vendor Enjoy-Digital -library user ./")
+        #tcl.append("ipx::associate_bus_interfaces -busif axi_in -clock axi_clk [ipx::current_core]")
+        #tcl.append("ipx::associate_bus_interfaces -busif axi_out -clock axi_clk [ipx::current_core]")
         tcl.append("ipx::edit_ip_in_project -upgrade true -name {} -directory {}.tmp component.xml".format(build_name, build_name))
         tcl.append("ipx::current_core component.xml")
+        tcl.append("proc_add_bus_clock \"axi_clk\" \"axi_in:axi_out\" \"axi_rst\"")
         tcl.append("ipx::update_checksums [ipx::current_core]")
         tcl.append("ipx::save_core [ipx::current_core]")
         tcl.append("close_project")
@@ -91,12 +132,7 @@ class AXIConverter(Module):
         # set up bd design
         tcl.append("create_bd_design $design_name")
         #build the BD
-        tcl.append("create_bd_cell -type ip -vlnv Enjoy-Digital:user:axi_converter_128b_to_64b:1.0 axi_converter_128b_t_0")
-        tcl.append("apply_bd_automation -rule xilinx.com:bd_rule:clkrst -config {Clk \"New Clocking Wizard (100 MHz)\" }  [get_bd_pins axi_converter_128b_t_0/axi_clk]")
-        tcl.append("make_bd_pins_external  [get_bd_pins clk_wiz/reset]")
-        tcl.append("make_bd_pins_external  [get_bd_pins clk_wiz/clk_in1]")
-        tcl.append("make_bd_intf_pins_external  [get_bd_intf_pins axi_converter_128b_t_0/axi_in]")
-        tcl.append("make_bd_intf_pins_external  [get_bd_intf_pins axi_converter_128b_t_0/axi_out]")
+        tcl.append("source ../bd_axi_converter_128b_to_64b.tcl")
         #Validate the design
         tcl.append("validate_bd_design")
         tcl.append("regenerate_bd_layout")
