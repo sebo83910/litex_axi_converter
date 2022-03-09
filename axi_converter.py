@@ -12,6 +12,7 @@ from litex.build.xilinx import XilinxPlatform
 
 from litex.soc.interconnect import stream
 from litex.soc.interconnect.axi import *
+from litex.soc.interconnect import csr_eventmanager as ev
 
 proc_add_bus_clock = """
 proc proc_add_bus_clock {clock_signal_name bus_inf_name {reset_signal_name ""} {reset_signal_mode "slave"}} {
@@ -56,6 +57,7 @@ def get_clkin_ios():
     return [
         ("axi_clk",  0, Pins(1)),
         ("axi_rst",  0, Pins(1)),
+        ("irq"    ,  0, Pins(1)),
     ]
 
 # AXIConverter -------------------------------------------------------------------------------------
@@ -77,6 +79,16 @@ class AXIConverter(Module):
         axi_out = AXIStreamInterface(data_width=output_width, user_width=user_width)
         platform.add_extension(axi_out.get_ios("axi_out"))
         self.comb += axi_out.connect_to_pads(platform.request("axi_out"), mode="master")
+
+        self.submodules.ev = ev.EventManager()
+        self.ev.my_int1 = ev.EventSourceProcess()
+        self.ev.my_int2 = ev.EventSourceProcess()
+        self.ev.finalize()
+
+        self.comb += self.ev.my_int1.trigger.eq(0)
+        self.comb += self.ev.my_int2.trigger.eq(1)
+
+        self.comb += platform.request("irq").eq(self.ev.irq)
 
         # Converter --------------------------------------------------------------------------------
         converter = stream.StrideConverter(axi_in.description, axi_out.description, reverse=reverse)
