@@ -98,11 +98,10 @@ class AXIConverter(Module):
         tcl.append(proc_add_bus_clock)
         tcl.append("create_project -force -name {}_packager".format(build_name))
         tcl.append("ipx::infer_core -vendor Enjoy-Digital -library user ./")
-        #tcl.append("ipx::associate_bus_interfaces -busif axi_in -clock axi_clk [ipx::current_core]")
-        #tcl.append("ipx::associate_bus_interfaces -busif axi_out -clock axi_clk [ipx::current_core]")
         tcl.append("ipx::edit_ip_in_project -upgrade true -name {} -directory {}.tmp component.xml".format(build_name, build_name))
         tcl.append("ipx::current_core component.xml")
-        tcl.append("proc_add_bus_clock \"axi_clk\" \"axi_in:axi_out\" \"axi_rst\"")
+        #SEBO: How to retrieve from LiteX the clock, reset and interface names?
+        tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axi_clk", "axi_in:axi_out", "axi_rst"))
         tcl.append("ipx::update_checksums [ipx::current_core]")
         tcl.append("ipx::save_core [ipx::current_core]")
         tcl.append("close_project")
