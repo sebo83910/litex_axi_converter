@@ -34,6 +34,13 @@ proc proc_archive_ip { vendor_name ip_name {version_number "1.0"} } {
 }
 """
 
+proc_declare_interrupt = """
+proc proc_declare_interrupt { irq_name } {
+  # declaration of the interrupt
+  ipx::infer_bus_interface $irq_name xilinx.com:signal:interrupt_rtl:1.0 [ipx::current_core]
+}
+"""
+
 proc_add_bus_clock = """
 proc proc_add_bus_clock {clock_signal_name bus_inf_name {reset_signal_name ""} {reset_signal_mode "slave"}} {
   set bus_inf_name_clean [string map {":" "_"} $bus_inf_name]
@@ -142,6 +149,7 @@ class AXIConverter(Module):
         tcl = []
         # Declare Procedures
         tcl.append(proc_add_bus_clock)
+        tcl.append(proc_declare_interrupt)
         tcl.append(proc_set_version)
         tcl.append(proc_archive_ip)
         # Create projet and send commands:
@@ -152,6 +160,7 @@ class AXIConverter(Module):
         #SEBO: How to retrieve from LiteX the clock, reset and interface names?
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axis_clk", "axis_in:axis_out", "axis_rst"))
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axilite_clk", "axilite_in", "axilite_rst"))
+        tcl.append("proc_declare_interrupt \"{}\"".format("irq"))
         tcl.append("ipx::update_checksums [ipx::current_core]")
         tcl.append("proc_set_version \"{}\" \"{}\" \"{}\"".format(version_number, "0", "axi_converter IP (Packaging Proof of Concept)"))
         tcl.append("ipx::save_core [ipx::current_core]")
