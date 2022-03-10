@@ -123,7 +123,7 @@ set bCheckIPsPassed 1
 set bCheckIPs 1
 if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
-Enjoy-Digital:user:axi_converter_128b_to_64b:1.0\
+Enjoy-Digital:user:axi_converter_128b_to_64b:1.3\
 xilinx.com:ip:proc_sys_reset:5.0\
 xilinx.com:ip:processing_system7:5.5\
 xilinx.com:ip:smartconnect:1.0\
@@ -225,7 +225,7 @@ proc create_root_design { parentCell } {
  ] $reset
 
   # Create instance: axi_converter_128b_t_0, and set properties
-  set axi_converter_128b_t_0 [ create_bd_cell -type ip -vlnv Enjoy-Digital:user:axi_converter_128b_to_64b:1.0 axi_converter_128b_t_0 ]
+  set axi_converter_128b_t_0 [ create_bd_cell -type ip -vlnv Enjoy-Digital:user:axi_converter_128b_to_64b:1.3 axi_converter_128b_t_0 ]
 
   # Create instance: proc_sys_reset_0, and set properties
   set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
@@ -236,10 +236,13 @@ proc create_root_design { parentCell } {
   # Create instance: processing_system7_0, and set properties
   set processing_system7_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7:5.5 processing_system7_0 ]
   set_property -dict [ list \
+   CONFIG.PCW_CORE1_IRQ_INTR {1} \
    CONFIG.PCW_FPGA_FCLK0_ENABLE {1} \
    CONFIG.PCW_FPGA_FCLK1_ENABLE {0} \
    CONFIG.PCW_FPGA_FCLK2_ENABLE {0} \
    CONFIG.PCW_FPGA_FCLK3_ENABLE {0} \
+   CONFIG.PCW_IRQ_F2P_INTR {1} \
+   CONFIG.PCW_USE_FABRIC_INTERRUPT {1} \
  ] $processing_system7_0
 
   # Create instance: smartconnect_0, and set properties
@@ -257,6 +260,7 @@ proc create_root_design { parentCell } {
   connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins axi_converter_128b_t_0/axilite_in] [get_bd_intf_pins smartconnect_0/M00_AXI]
 
   # Create port connections
+  connect_bd_net -net axi_converter_128b_t_0_irq [get_bd_pins axi_converter_128b_t_0/irq] [get_bd_pins processing_system7_0/Core1_nIRQ]
   connect_bd_net -net clk_in1_1_1 [get_bd_ports clk_axilite] [get_bd_pins axi_converter_128b_t_0/axilite_clk] [get_bd_pins proc_sys_reset_1/slowest_sync_clk] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins smartconnect_0/aclk]
   connect_bd_net -net clk_wiz_clk_out1 [get_bd_ports clk_axis] [get_bd_pins axi_converter_128b_t_0/axis_clk] [get_bd_pins proc_sys_reset_0/slowest_sync_clk]
   connect_bd_net -net proc_sys_reset_0_peripheral_reset [get_bd_pins axi_converter_128b_t_0/axis_rst] [get_bd_pins proc_sys_reset_0/peripheral_reset]

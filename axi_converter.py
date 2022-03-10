@@ -14,6 +14,17 @@ from litex.soc.interconnect import stream
 from litex.soc.interconnect.axi import *
 from litex.soc.interconnect import csr_eventmanager as ev
 
+proc_set_version = """
+proc proc_set_version { {version_number "1.0"} {core_revision_number "0"} {display_name "display TBD"} {description "description TBD"} } {
+  # Management of version/revision
+  set_property version $version_number [ipx::current_core]
+  set_property core_revision  $core_revision_number [ipx::current_core]
+  set_property display_name $display_name [ipx::current_core]
+  set_property description $description [ipx::current_core]
+
+}
+"""
+
 proc_add_bus_clock = """
 proc proc_add_bus_clock {clock_signal_name bus_inf_name {reset_signal_name ""} {reset_signal_mode "slave"}} {
   set bus_inf_name_clean [string map {":" "_"} $bus_inf_name]
@@ -118,7 +129,10 @@ class AXIConverter(Module):
 
         # Prepare Vivado's tcl core packager script
         tcl = []
+        # Declare Procedures
         tcl.append(proc_add_bus_clock)
+        tcl.append(proc_set_version)
+        # Create projet and send commands:
         tcl.append("create_project -force -name {}_packager".format(build_name))
         tcl.append("ipx::infer_core -vendor Enjoy-Digital -library user ./")
         tcl.append("ipx::edit_ip_in_project -upgrade true -name {} -directory {}.tmp component.xml".format(build_name, build_name))
@@ -127,6 +141,7 @@ class AXIConverter(Module):
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axis_clk", "axis_in:axis_out", "axis_rst"))
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axilite_clk", "axilite_in", "axilite_rst"))
         tcl.append("ipx::update_checksums [ipx::current_core]")
+        tcl.append("proc_set_version \"{}\" \"{}\" \"{}\"".format("1.3", "0", "axi_converter IP (Packaging Proof of Concept)"))
         tcl.append("ipx::save_core [ipx::current_core]")
         tcl.append("close_project")
         tcl.append("exit")
