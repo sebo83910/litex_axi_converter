@@ -25,6 +25,15 @@ proc proc_set_version { {version_number "1.0"} {core_revision_number "0"} {displ
 }
 """
 
+proc_archive_ip = """
+proc proc_archive_ip { vendor_name ip_name {version_number "1.0"} } {
+  # Management of archiving of the IP
+  set archive_name "./"
+  append archive_name $vendor_name "_" $ip_name "_" $version_number ".zip"
+  ipx::archive_core $archive_name [ipx::current_core]
+}
+"""
+
 proc_add_bus_clock = """
 proc proc_add_bus_clock {clock_signal_name bus_inf_name {reset_signal_name ""} {reset_signal_mode "slave"}} {
   set bus_inf_name_clean [string map {":" "_"} $bus_inf_name]
@@ -119,6 +128,8 @@ class AXIConverter(Module):
         self.comb += converter.source.connect(axis_out)
 
     def generate_package(self, build_name):
+
+        version_number = "1.3"
         # Create package directory
         package = "package_{}".format(build_name)
         shutil.rmtree(package, ignore_errors=True)
@@ -132,6 +143,7 @@ class AXIConverter(Module):
         # Declare Procedures
         tcl.append(proc_add_bus_clock)
         tcl.append(proc_set_version)
+        tcl.append(proc_archive_ip)
         # Create projet and send commands:
         tcl.append("create_project -force -name {}_packager".format(build_name))
         tcl.append("ipx::infer_core -vendor Enjoy-Digital -library user ./")
@@ -141,8 +153,9 @@ class AXIConverter(Module):
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axis_clk", "axis_in:axis_out", "axis_rst"))
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axilite_clk", "axilite_in", "axilite_rst"))
         tcl.append("ipx::update_checksums [ipx::current_core]")
-        tcl.append("proc_set_version \"{}\" \"{}\" \"{}\"".format("1.3", "0", "axi_converter IP (Packaging Proof of Concept)"))
+        tcl.append("proc_set_version \"{}\" \"{}\" \"{}\"".format(version_number, "0", "axi_converter IP (Packaging Proof of Concept)"))
         tcl.append("ipx::save_core [ipx::current_core]")
+        tcl.append("proc_archive_ip \"{}\" \"{}\" \"{}\"".format("Enjoy-Digital", build_name, version_number))
         tcl.append("close_project")
         tcl.append("exit")
         tools.write_to_file(package + "/packager.tcl", "\n".join(tcl))
