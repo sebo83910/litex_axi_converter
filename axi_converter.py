@@ -146,31 +146,38 @@ class AXIConverter(Module):
     # Verilog Post Processing --------------------------------------------------------------------------
     def _netlist_post_processing(self, infile, outfile):
         with open(infile, 'r') as reader:
-            print ("Name of the file: ", reader.name)
+            #print ("Name of the file: ", reader.name)
             inline = reader.readlines()
 
         with open(outfile, 'w') as writer:
-            print ("Name of the file: ", writer.name)
+            #print ("Name of the file: ", writer.name)
             for line in inline:
-                # print(line)
-                # exit()
                 writer.write(line)
-                # m = re.match("\);$", line)
                 m = re.search("^\);\n", line)
-                #if ';\n' in line:
                 if m:
-                    #print(line)
                     writer.write("parameter {} = {};\n".format("address_width",self.address_width))
                     writer.write("parameter {} = {};\n".format("input_width",self.input_width))
                     writer.write("parameter {} = {};\n".format("output_width",self.output_width))
                     writer.write("parameter {} = {};\n".format("user_width",self.user_width))
                     writer.write("parameter {} = {};\n".format("reverse",self.reverse))
 
+    # XDC Post Processing --------------------------------------------------------------------------
+    def _constraints_post_processing(self, infile, outfile):
+        Found = False
+        with open(infile, 'r') as reader:
+            #print ("Name of the file: ", reader.name)
+            inline = reader.readlines()
+
+        with open(outfile, 'w') as writer:
+            #print ("Name of the file: ", writer.name)
+            for line in inline:
+                m = re.search("Design constraints", line)
+                if m:
+                    Found = True
+                if Found:
+                    writer.write(line)
+
     def generate_package(self, build_name):
-
-        print("address_width =\"{}\"".format(self.address_width))
-
-        #exit()
 
         version_number = "1.3"
         # Create package directory
@@ -181,6 +188,7 @@ class AXIConverter(Module):
         # Copy core files to package
         # os.system("cp build/{}.v {}".format(build_name, package))
         self._netlist_post_processing("build/{}.v".format(build_name),"{}/{}.v".format(package,build_name))
+        self._constraints_post_processing("build/{}.xdc".format(build_name),"{}/{}.xdc".format(package,build_name))
         # SEBO : Issue #11.
         #os.system("cp build/{}.xdc {}".format(build_name, package))
 
