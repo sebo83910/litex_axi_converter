@@ -93,6 +93,12 @@ def get_clkin_ios():
 
 class AXIConverter(Module):
     def __init__(self, platform, address_width=64, input_width=64, output_width=64, user_width=0, reverse=False):
+        # SAve input parameter as generic for later use.
+        self.address_width = address_width
+        self.input_width   = input_width
+        self.output_width  = output_width
+        self.user_width    = user_width
+        self.reverse       = reverse
         # Clocking ---------------------------------------------------------------------------------
         platform.add_extension(get_clkin_ios())
         self.clock_domains.cd_sys  = ClockDomain()
@@ -136,6 +142,10 @@ class AXIConverter(Module):
 
     def generate_package(self, build_name):
 
+        print("address_width =\"{}\"".format(self.address_width))
+
+        #exit()
+
         version_number = "1.3"
         # Create package directory
         package = "package_{}".format(build_name)
@@ -144,6 +154,8 @@ class AXIConverter(Module):
 
         # Copy core files to package
         os.system("cp build/{}.v {}".format(build_name, package))
+        # SEBO : Issue #11.
+        #os.system("cp build/{}.xdc {}".format(build_name, package))
 
         # Prepare Vivado's tcl core packager script
         tcl = []
@@ -157,7 +169,7 @@ class AXIConverter(Module):
         tcl.append("ipx::infer_core -vendor Enjoy-Digital -library user ./")
         tcl.append("ipx::edit_ip_in_project -upgrade true -name {} -directory {}.tmp component.xml".format(build_name, build_name))
         tcl.append("ipx::current_core component.xml")
-        #SEBO: How to retrieve from LiteX the clock, reset and interface names?
+        #FIXME: How to retrieve from LiteX the clock, reset and interface names?
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axis_clk", "axis_in:axis_out", "axis_rst"))
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axilite_clk", "axilite_in", "axilite_rst"))
         tcl.append("proc_declare_interrupt \"{}\"".format("irq"))
@@ -183,8 +195,12 @@ class AXIConverter(Module):
 
         # Prepare Vivado's tcl core packager script
         tcl = []
+        # set variable names
         tcl.append("set project_dir \"{}\"".format(project))
         tcl.append("set design_name \"{}\"".format(build_name))
+        tcl.append("set part \"{}\"".format(part))
+        # set up project
+        tcl.append("create_project $design_name $project_dir -part $part -force")
         # set up IP repo
         tcl.append("set lib_dirs  [list  .. ]")
         tcl.append("set_property ip_repo_paths $lib_dirs [current_fileset]")
