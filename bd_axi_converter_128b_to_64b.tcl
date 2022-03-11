@@ -123,7 +123,7 @@ set bCheckIPsPassed 1
 set bCheckIPs 1
 if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
-Enjoy-Digital:user:axi_converter_128b_to_64b:1.3\
+Enjoy-Digital:user:AXIConverter:1.3\
 xilinx.com:ip:proc_sys_reset:5.0\
 xilinx.com:ip:processing_system7:5.5\
 xilinx.com:ip:smartconnect:1.0\
@@ -225,7 +225,7 @@ proc create_root_design { parentCell } {
  ] $reset
 
   # Create instance: axi_converter_128b_t_0, and set properties
-  set axi_converter_128b_t_0 [ create_bd_cell -type ip -vlnv Enjoy-Digital:user:axi_converter_128b_to_64b:1.3 axi_converter_128b_t_0 ]
+  set axi_converter_128b_t_0 [ create_bd_cell -type ip -vlnv Enjoy-Digital:user:AXIConverter:1.3 axi_converter_128b_t_0 ]
 
   # Create instance: proc_sys_reset_0, and set properties
   set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]

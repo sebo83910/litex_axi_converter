@@ -16,7 +16,14 @@ from litex.soc.interconnect.axi import *
 from litex.soc.interconnect import csr_eventmanager as ev
 
 proc_set_version = """
-proc proc_set_version { {ip_name "ip_tbd"}  {version_number "1.0"} {core_revision_number "0"} {display_name "display TBD"} {description "description TBD"} {vendor_name "Enjoy-Digital"}  {company_url "http://www.enjoy-digital.fr/"} } {
+proc proc_set_version { {ip_name "ip_tbd"}   \
+                        {version_number "1.0"}  \
+                        {core_revision_number "0"}  \
+                        {display_name "display TBD"}  \
+                        {description "description TBD"}  \
+                        {vendor_name "Enjoy-Digital"}   \
+                        {company_url "http://www.enjoy-digital.fr/"}  \
+  } {
   # Management of version/revision
   set_property version $version_number [ipx::current_core]
   set_property core_revision  $core_revision_number [ipx::current_core]
