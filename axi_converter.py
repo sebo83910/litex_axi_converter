@@ -37,6 +37,28 @@ proc proc_set_version { {ip_name "ip_tbd"}   \
 }
 """
 
+proc_set_device_family = """
+proc proc_set_device_family { {setting "all"} } {
+  # Management of supported families
+  if { $setting eq "all" } {
+      set i_families ""
+      foreach i_part [get_parts] {
+        lappend i_families [get_property FAMILY $i_part]
+      }
+      set i_families [lsort -unique $i_families]
+      set s_families [get_property supported_families [ipx::current_core]]
+      foreach i_family $i_families {
+        set s_families "$s_families $i_family Production"
+        set s_families "$s_families $i_family Beta"
+      }
+  } else {
+    set s_families $setting
+  }
+  set_property supported_families $s_families [ipx::current_core]
+  puts "got $s_families.\n"
+}
+"""
+
 proc_archive_ip = """
 proc proc_archive_ip { vendor_name ip_name {version_number "1.0"} } {
   # Management of archiving of the IP
@@ -209,6 +231,7 @@ class AXIConverter(Module):
         tcl.append(proc_add_bus_clock)
         tcl.append(proc_declare_interrupt)
         tcl.append(proc_set_version)
+        tcl.append(proc_set_device_family)
         tcl.append(proc_archive_ip)
         # Create projet and send commands:
         tcl.append("create_project -force -name {}_packager".format(build_name))
@@ -220,6 +243,8 @@ class AXIConverter(Module):
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axilite_clk", "axilite_in", "axilite_rst"))
         tcl.append("proc_declare_interrupt \"{}\"".format("irq"))
         tcl.append("ipx::update_checksums [ipx::current_core]")
+        # tcl.append("proc_set_device_family \"all\"")
+        tcl.append("proc_set_device_family \"zynq Production\"")
         tcl.append("proc_set_version \"{}\"  \"{}\" \"{}\" \"{}\"".format("AXIConverter", version_number, "0", "axi_converter IP (Packaging Proof of Concept)"))
         tcl.append("ipx::save_core [ipx::current_core]")
         tcl.append("proc_archive_ip \"{}\" \"{}\" \"{}\"".format("Enjoy-Digital", build_name, version_number))
