@@ -119,7 +119,38 @@ proc disable_gui_generic { name_var } {
 }
 """
 
+cutomize_gui_group_generic = """
+proc cutomize_gui_group_generic { } {
+    # Create group in the GUI:
+    puts "In cutomize_gui_axilite_generic"
+    ipgui::add_group -name {AXI Lite} -component [ipx::current_core] -parent [ipgui::get_pagespec -name "Page 0" -component [ipx::current_core] ] -display_name {AXI Lite} -layout {vertical}
+    ipgui::add_group -name {AXI Stream} -component [ipx::current_core] -parent [ipgui::get_pagespec -name "Page 0" -component [ipx::current_core] ] -display_name {AXI Stream} -layout {vertical}
+    ipgui::add_group -name {Misc} -component [ipx::current_core] -parent [ipgui::get_pagespec -name "Page 0" -component [ipx::current_core] ] -display_name {Misc} -layout {vertical}
+    }
+"""
 
+cutomize_gui_axilite_generic = """
+proc cutomize_gui_axilite_generic { } {
+    # Configure the AXI Lite GUI:
+    ipgui::move_param -component [ipx::current_core] -order 0 [ipgui::get_guiparamspec -name "address_width" -component [ipx::current_core]] -parent [ipgui::get_groupspec -name "AXI Lite" -component [ipx::current_core]]
+    }
+"""
+
+cutomize_gui_axistream_generic = """
+proc cutomize_gui_axistream_generic { } {
+    # Configure the AXI Stream GUI:
+    ipgui::move_param -component [ipx::current_core] -order 0 [ipgui::get_guiparamspec -name "input_width" -component [ipx::current_core]] -parent [ipgui::get_groupspec -name "AXI Stream" -component [ipx::current_core]]
+    ipgui::move_param -component [ipx::current_core] -order 1 [ipgui::get_guiparamspec -name "output_width" -component [ipx::current_core]] -parent [ipgui::get_groupspec -name "AXI Stream" -component [ipx::current_core]]
+    ipgui::move_param -component [ipx::current_core] -order 2 [ipgui::get_guiparamspec -name "user_width" -component [ipx::current_core]] -parent [ipgui::get_groupspec -name "AXI Stream" -component [ipx::current_core]]
+    }
+"""
+
+cutomize_gui_misc_generic = """
+proc cutomize_gui_misc_generic { } {
+    # Configure the Misc GUI:
+    ipgui::move_param -component [ipx::current_core] -order 0 [ipgui::get_guiparamspec -name "reverse" -component [ipx::current_core]] -parent [ipgui::get_groupspec -name "Misc" -component [ipx::current_core]]
+    }
+"""
 
 # IOs/Interfaces -----------------------------------------------------------------------------------
 
@@ -241,6 +272,10 @@ class AXIConverter(Module):
         tcl.append(proc_set_device_family)
         tcl.append(proc_archive_ip)
         tcl.append(disable_gui_generic)
+        tcl.append(cutomize_gui_group_generic)
+        tcl.append(cutomize_gui_axilite_generic)
+        tcl.append(cutomize_gui_axistream_generic)
+        tcl.append(cutomize_gui_misc_generic)
         # Create projet and send commands:
         tcl.append("create_project -force -name {}_packager".format(build_name))
         tcl.append("ipx::infer_core -vendor Enjoy-Digital -library user ./")
@@ -250,18 +285,22 @@ class AXIConverter(Module):
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axis_clk", "axis_in:axis_out", "axis_rst"))
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axilite_clk", "axilite_in", "axilite_rst"))
         tcl.append("proc_declare_interrupt \"{}\"".format("irq"))
-        tcl.append("ipx::update_checksums [ipx::current_core]")
         # tcl.append("proc_set_device_family \"all\"")
         tcl.append("proc_set_device_family \"zynq Production\"")
         #GUI customization
+        tcl.append("cutomize_gui_group_generic")
+        tcl.append("cutomize_gui_axilite_generic")
+        tcl.append("cutomize_gui_axistream_generic")
+        tcl.append("cutomize_gui_misc_generic")
         tcl.append("disable_gui_generic \"address_width\"")
         tcl.append("disable_gui_generic \"input_width\"")
         tcl.append("disable_gui_generic \"output_width\"")
         tcl.append("disable_gui_generic \"user_width\"")
         tcl.append("disable_gui_generic \"reverse\"")
-        #tcl.append("set_property enablement_value false [ipx::get_user_parameters reverse -of_objects [ipx::current_core]]")
         tcl.append("proc_set_version \"{}\"  \"{}\" \"{}\" \"{}\"".format("AXIConverter", version_number, "0", "axi_converter IP (Packaging Proof of Concept)"))
         
+        tcl.append("ipx::create_xgui_files [ipx::current_core]")
+        tcl.append("ipx::update_checksums [ipx::current_core]")
         tcl.append("ipx::save_core [ipx::current_core]")
         tcl.append("proc_archive_ip \"{}\" \"{}\" \"{}\"".format("Enjoy-Digital", build_name, version_number))
         tcl.append("close_project")
