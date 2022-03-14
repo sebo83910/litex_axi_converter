@@ -119,38 +119,75 @@ proc disable_gui_generic { name_var } {
 }
 """
 
-cutomize_gui_group_generic = """
-proc cutomize_gui_group_generic { } {
-    # Create group in the GUI:
-    puts "In cutomize_gui_axilite_generic"
-    ipgui::add_group -name {AXI Lite} -component [ipx::current_core] -parent [ipgui::get_pagespec -name "Page 0" -component [ipx::current_core] ] -display_name {AXI Lite} -layout {vertical}
-    ipgui::add_group -name {AXI Stream} -component [ipx::current_core] -parent [ipgui::get_pagespec -name "Page 0" -component [ipx::current_core] ] -display_name {AXI Stream} -layout {vertical}
-    ipgui::add_group -name {Misc} -component [ipx::current_core] -parent [ipgui::get_pagespec -name "Page 0" -component [ipx::current_core] ] -display_name {Misc} -layout {vertical}
-    }
-"""
+# GUI Interfaces -----------------------------------------------------------------------------------
 
-cutomize_gui_axilite_generic = """
-proc cutomize_gui_axilite_generic { } {
-    # Configure the AXI Lite GUI:
-    ipgui::move_param -component [ipx::current_core] -order 0 [ipgui::get_guiparamspec -name "address_width" -component [ipx::current_core]] -parent [ipgui::get_groupspec -name "AXI Lite" -component [ipx::current_core]]
-    }
-"""
+def get_gui_interface():
+    return {
+        'AXI Lite' : 
+            {
+            'order': 0,
+            'vars' : 
+                {
+                'address_width' : 
+                    {
+                    'order' : 0,
+                    },
+                },
+            },
+        'AXI Stream' :
+            {
+            'order': 1,
+            'vars' : 
+                {
+                'input_width' : 
+                    {
+                    'order' : 0,
+                    },
+                'output_width' : 
+                    {
+                    'order' : 1,
+                    },
+                'user_width' : 
+                    {
+                    'order' : 2,
+                    },
+                },
+            },
+        'Misc' :
+            {
+            'order': 2,
+            'vars' : 
+                {
+                'reverse' : 
+                    {
+                    'order' : 0,
+                    },
+                },
+            },
 
-cutomize_gui_axistream_generic = """
-proc cutomize_gui_axistream_generic { } {
-    # Configure the AXI Stream GUI:
-    ipgui::move_param -component [ipx::current_core] -order 0 [ipgui::get_guiparamspec -name "input_width" -component [ipx::current_core]] -parent [ipgui::get_groupspec -name "AXI Stream" -component [ipx::current_core]]
-    ipgui::move_param -component [ipx::current_core] -order 1 [ipgui::get_guiparamspec -name "output_width" -component [ipx::current_core]] -parent [ipgui::get_groupspec -name "AXI Stream" -component [ipx::current_core]]
-    ipgui::move_param -component [ipx::current_core] -order 2 [ipgui::get_guiparamspec -name "user_width" -component [ipx::current_core]] -parent [ipgui::get_groupspec -name "AXI Stream" -component [ipx::current_core]]
     }
-"""
 
-cutomize_gui_misc_generic = """
-proc cutomize_gui_misc_generic { } {
-    # Configure the Misc GUI:
-    ipgui::move_param -component [ipx::current_core] -order 0 [ipgui::get_guiparamspec -name "reverse" -component [ipx::current_core]] -parent [ipgui::get_groupspec -name "Misc" -component [ipx::current_core]]
-    }
-"""
+def build_gui():
+
+    dict_gui = get_gui_interface()
+    string = '# Set GUI properties\n'
+    #Parse keys to retrieve the group names.
+    for group in dict_gui:
+        string1 =  'ipgui::add_group -name {'+group+'} -component [ipx::current_core] '
+        string1 += '-parent [ipgui::get_pagespec -name "Page 0" '
+        string1 += '-component [ipx::current_core] ] -display_name {'+group+'} -layout {vertical}\n'
+        string += string1 
+    #Parse vars to retrieve the generic names & order.
+    for group in dict_gui:
+        vari = dict_gui[group]['vars']
+        for var in vari:
+            string2 =  'ipgui::move_param -component [ipx::current_core] '
+            string2 += '-order '+str(vari[var]['order'])+' [ipgui::get_guiparamspec -name "'+var+'" '
+            string2 += '-component [ipx::current_core]] -parent [ipgui::get_groupspec '
+            string2 += '-name "'+group+'" -component [ipx::current_core]]\n'
+            string += string2
+    # print(string)
+    return(string)
 
 # IOs/Interfaces -----------------------------------------------------------------------------------
 
@@ -272,10 +309,6 @@ class AXIConverter(Module):
         tcl.append(proc_set_device_family)
         tcl.append(proc_archive_ip)
         tcl.append(disable_gui_generic)
-        tcl.append(cutomize_gui_group_generic)
-        tcl.append(cutomize_gui_axilite_generic)
-        tcl.append(cutomize_gui_axistream_generic)
-        tcl.append(cutomize_gui_misc_generic)
         # Create projet and send commands:
         tcl.append("create_project -force -name {}_packager".format(build_name))
         tcl.append("ipx::infer_core -vendor Enjoy-Digital -library user ./")
@@ -288,10 +321,7 @@ class AXIConverter(Module):
         # tcl.append("proc_set_device_family \"all\"")
         tcl.append("proc_set_device_family \"zynq Production\"")
         #GUI customization
-        tcl.append("cutomize_gui_group_generic")
-        tcl.append("cutomize_gui_axilite_generic")
-        tcl.append("cutomize_gui_axistream_generic")
-        tcl.append("cutomize_gui_misc_generic")
+        tcl.append(build_gui())
         tcl.append("disable_gui_generic \"address_width\"")
         tcl.append("disable_gui_generic \"input_width\"")
         tcl.append("disable_gui_generic \"output_width\"")
@@ -349,6 +379,8 @@ class AXIConverter(Module):
 # Build --------------------------------------------------------------------------------------------
 
 def main():
+    # build_gui()
+    # exit()
     parser = argparse.ArgumentParser(description="AXI Converter core")
     parser.add_argument("--input-width",   default=128,         help="AXI input data width  (default=128).")
     parser.add_argument("--output-width",  default=64,          help="AXI output data width (default=64).")
