@@ -112,13 +112,6 @@ proc proc_add_bus_clock {clock_signal_name bus_inf_name {reset_signal_name ""} {
 }
 """
 
-disable_gui_generic = """
-proc disable_gui_generic { name_var } {
-    # Diable the generic paramter:
-    set_property enablement_value false [ipx::get_user_parameters $name_var -of_objects [ipx::current_core]]
-}
-"""
-
 # GUI Interfaces -----------------------------------------------------------------------------------
 
 def get_gui_interface():
@@ -185,8 +178,9 @@ def build_gui():
             string2 += '-order '+str(vari[var]['order'])+' [ipgui::get_guiparamspec -name "'+var+'" '
             string2 += '-component [ipx::current_core]] -parent [ipgui::get_groupspec '
             string2 += '-name "'+group+'" -component [ipx::current_core]]\n'
+            string2 += 'set_property enablement_value false [ipx::get_user_parameters '+var+' -of_objects [ipx::current_core]]\n'
+
             string += string2
-    # print(string)
     return(string)
 
 # IOs/Interfaces -----------------------------------------------------------------------------------
@@ -308,7 +302,6 @@ class AXIConverter(Module):
         tcl.append(proc_set_version)
         tcl.append(proc_set_device_family)
         tcl.append(proc_archive_ip)
-        tcl.append(disable_gui_generic)
         # Create projet and send commands:
         tcl.append("create_project -force -name {}_packager".format(build_name))
         tcl.append("ipx::infer_core -vendor Enjoy-Digital -library user ./")
@@ -322,11 +315,6 @@ class AXIConverter(Module):
         tcl.append("proc_set_device_family \"zynq Production\"")
         #GUI customization
         tcl.append(build_gui())
-        tcl.append("disable_gui_generic \"address_width\"")
-        tcl.append("disable_gui_generic \"input_width\"")
-        tcl.append("disable_gui_generic \"output_width\"")
-        tcl.append("disable_gui_generic \"user_width\"")
-        tcl.append("disable_gui_generic \"reverse\"")
         tcl.append("proc_set_version \"{}\"  \"{}\" \"{}\" \"{}\"".format("AXIConverter", version_number, "0", "axi_converter IP (Packaging Proof of Concept)"))
         
         tcl.append("ipx::create_xgui_files [ipx::current_core]")
