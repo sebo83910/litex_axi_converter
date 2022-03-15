@@ -112,6 +112,21 @@ proc proc_add_bus_clock {clock_signal_name bus_inf_name {reset_signal_name ""} {
 }
 """
 
+proc_add_ip_files = """
+proc proc_add_ip_files {ip_name ip_files} {
+  set proj_fileset [get_filesets sources_1]
+  foreach m_file $ip_files {
+    puts "got the following file to add: $m_file.\n"
+    if {[file extension $m_file] eq ".xdc"} {
+      add_files -copy_to ./src -norecurse -fileset constrs_1 $m_file
+    } else {
+      add_files -copy_to ./src -norecurse -fileset $proj_fileset $m_file
+    }
+  }
+  set_property "top" "$ip_name" $proj_fileset
+}
+"""
+
 # GUI Interfaces -----------------------------------------------------------------------------------
 
 def get_gui_interface():
@@ -245,8 +260,17 @@ class AXIConverter(Module):
         self.comb += axis_in.connect(converter.sink)
         self.comb += converter.source.connect(axis_out)
 
+        # ILA ---------------------------------------------------------------------------------------
+        platform.add_source("ila/ila.xci")
+        probe0 = Signal(2)
+        self.comb += probe0.eq(Cat(self.ev.irq, self.ev.my_int1.trigger))
+        self.specials += [
+            Instance("ila", i_clk=self.cd_sys.clk, i_probe0=probe0),
+        ]
+
     # Verilog Post Processing --------------------------------------------------------------------------
     def _netlist_post_processing(self, infile, outfile):
+        Found = False
         with open(infile, 'r') as reader:
             #print ("Name of the file: ", reader.name)
             inline = reader.readlines()
@@ -256,12 +280,13 @@ class AXIConverter(Module):
             for line in inline:
                 writer.write(line)
                 m = re.search("^\);\n", line)
-                if m:
+                if m and not Found:
                     writer.write("parameter {} = {};\n".format("address_width",self.address_width))
                     writer.write("parameter {} = {};\n".format("input_width",self.input_width))
                     writer.write("parameter {} = {};\n".format("output_width",self.output_width))
                     writer.write("parameter {} = {};\n".format("user_width",self.user_width))
-                    writer.write("parameter {} = {};\n".format("reverse",self.reverse))
+                    writer.write("parameter {} = {};\n".format("reverse",0))
+                    Found = True
 
     # XDC Post Processing --------------------------------------------------------------------------
     def _constraints_post_processing(self, infile, outfile):
@@ -288,7 +313,7 @@ class AXIConverter(Module):
         os.makedirs(package)
 
         # Copy core files to package
-        # os.system("cp build/{}.v {}".format(build_name, package))
+        os.system("cp -r ila/ila.xci {}".format(package))
         self._netlist_post_processing("build/{}.v".format(build_name),"{}/{}.v".format(package,build_name))
         self._constraints_post_processing("build/{}.xdc".format(build_name),"{}/{}.xdc".format(package,build_name))
         # SEBO : Issue #11.
@@ -297,6 +322,7 @@ class AXIConverter(Module):
         # Prepare Vivado's tcl core packager script
         tcl = []
         # Declare Procedures
+        tcl.append(proc_add_ip_files)
         tcl.append(proc_add_bus_clock)
         tcl.append(proc_declare_interrupt)
         tcl.append(proc_set_version)
@@ -304,21 +330,28 @@ class AXIConverter(Module):
         tcl.append(proc_archive_ip)
         # Create projet and send commands:
         tcl.append("create_project -force -name {}_packager".format(build_name))
-        tcl.append("ipx::infer_core -vendor Enjoy-Digital -library user ./")
-        tcl.append("ipx::edit_ip_in_project -upgrade true -name {} -directory {}.tmp component.xml".format(build_name, build_name))
-        tcl.append("ipx::current_core component.xml")
+
+        #Add files
+        tcl.append("proc_add_ip_files \"{}\"  \"{}\" ".format(build_name, "[list \"./ila.xci\" \"./"+build_name+".xdc\" \"./"+build_name+".v\"]"))
+        
+        tcl.append("ipx::package_project -root_dir . -vendor Enjoy-Digital.com -library user -taxonomy /Enjoy_Digital")
+        tcl.append("set_property name {} [ipx::current_core]".format(build_name))
+        # tcl.append("proc_set_device_family \"zynq Production\"")
+        tcl.append("proc_set_device_family \"all\"")
+        tcl.append("ipx::save_core [ipx::current_core]")
+        
         #FIXME: How to retrieve from LiteX the clock, reset and interface names?
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axis_clk", "axis_in:axis_out", "axis_rst"))
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axilite_clk", "axilite_in", "axilite_rst"))
         tcl.append("proc_declare_interrupt \"{}\"".format("irq"))
-        # tcl.append("proc_set_device_family \"all\"")
-        tcl.append("proc_set_device_family \"zynq Production\"")
+        
         #GUI customization
         tcl.append(build_gui())
         tcl.append("proc_set_version \"{}\"  \"{}\" \"{}\" \"{}\"".format("AXIConverter", version_number, "0", "axi_converter IP (Packaging Proof of Concept)"))
         
         tcl.append("ipx::create_xgui_files [ipx::current_core]")
         tcl.append("ipx::update_checksums [ipx::current_core]")
+        tcl.append("ipx::check_integrity -quiet [ipx::current_core]")
         tcl.append("ipx::save_core [ipx::current_core]")
         tcl.append("proc_archive_ip \"{}\" \"{}\" \"{}\"".format("Enjoy-Digital", build_name, version_number))
         tcl.append("close_project")
@@ -329,10 +362,12 @@ class AXIConverter(Module):
         os.system("cd {} && vivado -mode batch -source packager.tcl".format(package))
 
     def generate_project(self, build_name):
-        part = "XC7Z010-CLG225-1"
+        part = "xc7z010iclg225-1L"
 
         # Create project directory
         project = "project_{}".format(build_name)
+        # Create package directory
+        package = "package_{}".format(build_name)
         
         shutil.rmtree(project, ignore_errors=True)
         os.makedirs(project)
@@ -346,7 +381,7 @@ class AXIConverter(Module):
         # set up project
         tcl.append("create_project $design_name $project_dir -part $part -force")
         # set up IP repo
-        tcl.append("set lib_dirs  [list  .. ]")
+        tcl.append("set lib_dirs  [list  ../{} ]".format(package))
         tcl.append("set_property ip_repo_paths $lib_dirs [current_fileset]")
         tcl.append("update_ip_catalog")
         # set up bd design
