@@ -14,6 +14,52 @@ from litex.build.xilinx import XilinxPlatform
 from litex.soc.interconnect import stream
 from litex.soc.interconnect.axi import *
 from litex.soc.interconnect import csr_eventmanager as ev
+from litex.soc.interconnect import wishbone
+
+proc_define_interface = """
+proc proc_define_interface { name } {
+  
+  ipx::create_abstraction_definition Enjoy-Digital.com interface ${name}_rtl 1.0
+  ipx::create_bus_definition Enjoy-Digital.com interface $name 1.0
+
+  set_property xml_file_name ${name}_rtl.xml [ipx::current_busabs]
+  set_property xml_file_name ${name}.xml [ipx::current_busdef]
+  set_property bus_type_vlnv Enjoy-Digital.com:interface:${name}:1.0 [ipx::current_busabs]
+
+  ipx::save_abstraction_definition [ipx::current_busabs]
+  ipx::save_bus_definition [ipx::current_busdef]
+
+}
+"""
+
+proc_define_interface_port = """
+proc proc_define_interface_port {name width dir {type none}} {
+
+  ipx::add_bus_abstraction_port $name [ipx::current_busabs]
+  set m_intf [ipx::get_bus_abstraction_ports $name -of_objects [ipx::current_busabs]]
+  set_property master_presence required $m_intf
+  set_property slave_presence  required $m_intf
+  set_property master_width $width $m_intf
+  set_property slave_width  $width $m_intf
+
+  set m_dir "in"
+  set s_dir "out"
+  if {$dir eq "output"} {
+    set m_dir "out"
+    set s_dir "in"
+  }
+
+  set_property master_direction $m_dir $m_intf
+  set_property slave_direction  $s_dir $m_intf
+
+  if {$type ne "none"} {
+    set_property is_${type} true $m_intf
+  }
+
+  ipx::save_bus_definition [ipx::current_busdef]
+  ipx::save_abstraction_definition [ipx::current_busabs]
+}
+"""
 
 proc_set_version = """
 proc proc_set_version { {ip_name "ip_tbd"}   \
@@ -112,6 +158,28 @@ proc proc_add_bus_clock {clock_signal_name bus_inf_name {reset_signal_name ""} {
 }
 """
 
+proc_add_bus = """
+# Add a new port map definition to a bus interface.
+proc proc_add_port_map {bus phys logic} {
+  set map [ipx::add_port_map $phys $bus]
+  set_property "PHYSICAL_NAME" $phys $map
+  set_property "LOGICAL_NAME" $logic $map
+}
+
+proc proc_add_bus {bus_name mode abs_type bus_type port_maps} {
+  set bus [ipx::add_bus_interface $bus_name [ipx::current_core]]
+
+  set_property "ABSTRACTION_TYPE_VLNV" $abs_type $bus
+  set_property "BUS_TYPE_VLNV" $bus_type $bus
+  set_property "INTERFACE_MODE" $mode $bus
+
+  foreach port_map $port_maps {
+    proc_add_port_map $bus {*}$port_map
+  }
+}
+
+"""
+
 proc_add_ip_files = """
 proc proc_add_ip_files {ip_name ip_files} {
   set proj_fileset [get_filesets sources_1]
@@ -125,6 +193,25 @@ proc proc_add_ip_files {ip_name ip_files} {
   }
   set_property "top" "$ip_name" $proj_fileset
 }
+"""
+
+wishbone_add_bus = """
+proc_add_bus "wishbone_in" "slave" \
+    "Enjoy-Digital.com:interface:wishbone_rtl:1.0" \
+    "Enjoy-Digital.com:interface:wishbone:1.0" \
+    { \
+        {"wishbone_in_adr" "wishbone_in_adr"} \
+        {"wishbone_in_dat_w" "wishbone_in_dat_w"} \
+        {"wishbone_in_dat_r" "wishbone_in_dat_r"} \
+        {"wishbone_in_sel" "wishbone_in_sel"} \
+        {"wishbone_in_cyc" "wishbone_in_cyc"} \
+        {"wishbone_in_stb" "wishbone_in_stb"} \
+        {"wishbone_in_ack" "wishbone_in_ack"} \
+        {"wishbone_in_we" "wishbone_in_we"} \
+        {"wishbone_in_cti" "wishbone_in_cti"} \
+        {"wishbone_in_bte" "wishbone_in_bte"} \
+        {"wishbone_in_err" "wishbone_in_err"} \
+    }
 """
 
 # GUI Interfaces -----------------------------------------------------------------------------------
@@ -244,6 +331,11 @@ class AXIConverter(Module):
         platform.add_extension(axis_out.get_ios("axis_out"))
         self.comb += axis_out.connect_to_pads(platform.request("axis_out"), mode="master")
 
+        # Custom interface -----------------------------------------------------------------------
+        wishbone_in = wishbone.Interface(data_width=16)
+        platform.add_extension(wishbone_in.get_ios("wishbone_in"))
+        self.comb += wishbone_in.connect_to_pads(platform.request("wishbone_in"), mode="slave")
+
         self.submodules.ev = ev.EventManager()
         self.ev.my_int1 = ev.EventSourceProcess()
         self.ev.my_int2 = ev.EventSourceProcess()
@@ -317,12 +409,12 @@ class AXIConverter(Module):
         self._netlist_post_processing("build/{}.v".format(build_name),"{}/{}.v".format(package,build_name))
         self._constraints_post_processing("build/{}.xdc".format(build_name),"{}/{}.xdc".format(package,build_name))
         # SEBO : Issue #11.
-        #os.system("cp build/{}.xdc {}".format(build_name, package))
-
+        
         # Prepare Vivado's tcl core packager script
         tcl = []
         # Declare Procedures
         tcl.append(proc_add_ip_files)
+        tcl.append(proc_add_bus)
         tcl.append(proc_add_bus_clock)
         tcl.append(proc_declare_interrupt)
         tcl.append(proc_set_version)
@@ -339,6 +431,9 @@ class AXIConverter(Module):
         # tcl.append("proc_set_device_family \"zynq Production\"")
         tcl.append("proc_set_device_family \"all\"")
         tcl.append("ipx::save_core [ipx::current_core]")
+
+        tcl.append(wishbone_add_bus)
+        tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axilite_clk", "wishbone_in", "axilite_rst"))
         
         #FIXME: How to retrieve from LiteX the clock, reset and interface names?
         tcl.append("proc_add_bus_clock \"{}\" \"{}\" \"{}\"".format("axis_clk", "axis_in:axis_out", "axis_rst"))
@@ -381,7 +476,7 @@ class AXIConverter(Module):
         # set up project
         tcl.append("create_project $design_name $project_dir -part $part -force")
         # set up IP repo
-        tcl.append("set lib_dirs  [list  ../{} ]".format(package))
+        tcl.append("set lib_dirs  [list  ../{} ../{} ]".format(package, "interfaces"))
         tcl.append("set_property ip_repo_paths $lib_dirs [current_fileset]")
         tcl.append("update_ip_catalog")
         # set up bd design
@@ -398,6 +493,37 @@ class AXIConverter(Module):
         # Run Vivado's tcl core packager script
         os.system("cd {} && vivado -source project.tcl".format(project))
 
+    def generate_interface(self, build_name):
+        project = "interfaces"
+        shutil.rmtree(project, ignore_errors=True)
+        os.makedirs(project)
+
+        # Prepare Vivado's tcl interface build script
+        tcl = []
+        # Declare Procedures
+        tcl.append(proc_define_interface)
+        tcl.append(proc_define_interface_port)
+        tcl.append("set if_name {}".format("wishbone"))
+        # declare the interface name
+        tcl.append("proc_define_interface $if_name")
+        # declare the interface ports
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_adr","30","input"))
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_dat_w","16","input"))
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_dat_r","16","output"))
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_sel","2","input"))
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_cyc","1","input"))
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_stb","1","input"))
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_ack","1","output"))
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_we","1","input"))
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_cti","3","input"))
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_bte","2","input"))
+        tcl.append("proc_define_interface_port {} {} {} ".format("wishbone_err","1","output"))
+        
+        tools.write_to_file(project + "/interfaces.tcl", "\n".join(tcl))
+
+        # Run Vivado's tcl core packager script
+        os.system("cd {} && vivado -mode batch -source interfaces.tcl".format(project))
+
 
 # Build --------------------------------------------------------------------------------------------
 
@@ -410,6 +536,7 @@ def main():
     parser.add_argument("--user-width",    default=0,           help="AXI user width (default=0).")
     parser.add_argument("--reverse",       action="store_true", help="Reverse converter ordering.")
     parser.add_argument("--build",         action="store_true", help="Build core")
+    parser.add_argument("--interface",     action="store_true", help="Build Package custom interfaces")
     parser.add_argument("--package",       action="store_true", help="Package core")
     parser.add_argument("--project",       action="store_true", help="Create project including the core")
     args = parser.parse_args()
@@ -427,6 +554,8 @@ def main():
     build_name = "axi_converter_{}b_to_{}b".format(input_width, output_width)
     if args.build:
         platform.build(module, build_name=build_name, run=False, regular_comb=False)
+    if args.interface:
+        module.generate_interface(build_name)
     if args.package:
         module.generate_package(build_name)
     if args.project:
