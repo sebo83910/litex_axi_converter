@@ -215,7 +215,8 @@ class AXIConverter(Module):
         # Create project directory
         project = "project_{}".format(build_name)
         # Create package directory
-        package = "package_{}".format(build_name)
+        # package = "package_{}".format(build_name)
+        package = "package"
         
         shutil.rmtree(project, ignore_errors=True)
         os.makedirs(project)
@@ -258,7 +259,6 @@ def main():
     parser.add_argument("--user-width",    default=0,           help="AXI user width (default=0).")
     parser.add_argument("--reverse",       action="store_true", help="Reverse converter ordering.")
     parser.add_argument("--build",         action="store_true", help="Build core")
-    # parser.add_argument("--interface",     action="store_true", help="Build Package custom interfaces")
     parser.add_argument("--package",       action="store_true", help="Package core")
     parser.add_argument("--project",       action="store_true", help="Create project including the core")
     args = parser.parse_args()
@@ -287,7 +287,8 @@ def main():
         platform.build(module, build_name=build_name, run=False)
     if args.package:
         file_list = ["../ila/ila.xci", "../build/"+build_name+".xdc", "../build/"+build_name+".v"]
-        platform.version_number = "1.3"
+        platform.packaging.version_number = "1.3"
+        # exit()
         platform.package(build_name=build_name, file_list=file_list, 
             clock_domain=get_interface_clocks(),
             generic_parameters=get_generic_parameters,
